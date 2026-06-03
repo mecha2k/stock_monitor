@@ -33,8 +33,12 @@ TARGET_STOCKS: List[str] = ["AAPL", "GOOGL", "TSLA"]
 # 2. Telegram Bot API 설정
 #    .env 파일 또는 환경 변수에서 자동 로드됩니다.
 # ──────────────────────────────────────────────
-TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
-TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "YOUR_TELEGRAM_CHAT_ID_HERE")
+TELEGRAM_BOT_TOKEN: str = os.getenv(
+    "TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+)
+TELEGRAM_CHAT_ID: str = os.getenv(
+    "TELEGRAM_CHAT_ID", "YOUR_TELEGRAM_CHAT_ID_HERE"
+)
 
 # ──────────────────────────────────────────────
 # 3. Google Gemini API 설정

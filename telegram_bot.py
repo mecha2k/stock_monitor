@@ -141,7 +141,9 @@ class TelegramNotifier:
             return True
 
         except telegram_error.InvalidToken:
-            logger.error("잘못된 봇 토큰입니다. BotFather에서 발급받은 토큰을 확인해 주세요.")
+            logger.error(
+                "잘못된 봇 토큰입니다. BotFather에서 발급받은 토큰을 확인해 주세요."
+            )
         except telegram_error.ChatNotFound:
             logger.error(
                 "Chat ID '%s'를 찾을 수 없습니다. "
@@ -232,12 +234,15 @@ class TelegramNotifier:
         Returns:
             bool: 전송 성공이면 True, 실패이면 False
         """
+
         def _run_in_thread() -> bool:
             """별도 스레드에서 새로운 이벤트 루프를 생성하여 실행합니다."""
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                return loop.run_until_complete(self.send_message(text, **kwargs))
+                return loop.run_until_complete(
+                    self.send_message(text, **kwargs)
+                )
             finally:
                 loop.close()
 
@@ -262,7 +267,9 @@ async def _run_connection_test() -> None:
         print("\n[1단계] 봇 연결 상태 확인 중...")
         is_connected = await notifier.verify_connection()
         if not is_connected:
-            print("❌ 연결 실패. .env 파일의 TELEGRAM_BOT_TOKEN을 확인해 주세요.")
+            print(
+                "❌ 연결 실패. .env 파일의 TELEGRAM_BOT_TOKEN을 확인해 주세요."
+            )
             return
 
         # 2단계: 테스트 메시지 전송
