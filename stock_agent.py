@@ -122,9 +122,9 @@ class StockAgent:
             # gemini-2.5-flash 추론 시간을 고려해 30초로 설정
             with urllib.request.urlopen(req, timeout=30) as response:
                 res_body = json.loads(response.read().decode("utf-8"))
-                response_text = res_body["candidates"][0]["content"][
-                    "parts"
-                ][0]["text"].strip()
+                response_text = res_body["candidates"][0]["content"]["parts"][
+                    0
+                ]["text"].strip()
 
                 # Gemini가 ```json ... ``` 마크다운 블록으로 응답할 경우 제거
                 if response_text.startswith("```"):
