@@ -1,0 +1,52 @@
+# ============================================================
+# Stock Monitor - .gitignore
+# 민감 정보 및 불필요한 파일을 Git 추적에서 제외합니다.
+# ============================================================
+
+# --- 환경 변수 / 시크릿 파일 (절대 커밋 금지!) ---
+.env
+.env.local
+.env.*.local
+*.env
+
+# --- 일회성 유틸리티 스크립트 ---
+get_chat_id.py
+
+# --- Python 캐시 및 컴파일 파일 ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# --- 가상 환경 (venv) ---
+venv/
+.venv/
+env/
+.env_dir/
+ENV/
+
+# --- 빌드 / 배포 산출물 ---
+dist/
+build/
+*.egg-info/
+*.egg
+
+# --- 테스트 및 커버리지 리포트 ---
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# --- IDE / 에디터 설정 파일 ---
+.idea/
+.vscode/
+*.code-workspace
+
+# --- OS 생성 파일 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 로그 파일 ---
+*.log
+logs/
