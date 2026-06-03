@@ -240,9 +240,7 @@ class TelegramNotifier:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                return loop.run_until_complete(
-                    self.send_message(text, **kwargs)
-                )
+                return loop.run_until_complete(self.send_message(text, **kwargs))
             finally:
                 loop.close()
 
@@ -267,9 +265,7 @@ async def _run_connection_test() -> None:
         print("\n[1단계] 봇 연결 상태 확인 중...")
         is_connected = await notifier.verify_connection()
         if not is_connected:
-            print(
-                "❌ 연결 실패. .env 파일의 TELEGRAM_BOT_TOKEN을 확인해 주세요."
-            )
+            print("❌ 연결 실패. .env 파일의 TELEGRAM_BOT_TOKEN을 확인해 주세요.")
             return
 
         # 2단계: 테스트 메시지 전송
