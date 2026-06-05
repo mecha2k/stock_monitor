@@ -1,9 +1,10 @@
 import os
+import time
 import sys
 import json
 import unicodedata
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import urllib.request
 import urllib.parse
 import feedparser
@@ -19,6 +20,11 @@ KST = timezone(timedelta(hours=9))
 
 class StockAgent:
     """미국 주식 뉴스를 모니터링하고 분석하여 텔레그램으로 전송하는 핵심 에이전트 클래스입니다."""
+
+    # 1차 모델: 최신 고성능 모델 / 2차 모델: 1차 실패 시 폴백 모델
+    PRIMARY_MODEL = "gemini-2.5-flash"
+    FALLBACK_MODEL = "gemini-2.5-flash-lite"
+    GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
     def __init__(self) -> None:
         """StockAgent 클래스의 생성자입니다."""
@@ -72,12 +78,98 @@ class StockAgent:
             print(f"[{ticker}] 뉴스 수집 실패: {e}")
             return []
 
-    def analyze_news_with_gemini(
-        self, ticker: str, title: str
-    ) -> Dict[str, Any]:
+    def _call_gemini_with_retry(
+        self, ticker: str, model: str, payload: dict, max_retries: int = 3
+    ) -> Optional[Dict[str, Any]]:
+        """
+        지정된 모델로 Gemini API를 호출하고, 429 발생 시 Exponential Backoff로 재시도합니다.
+        성공 시 파싱된 딕셔너리를 반환하고, 모든 재시도 실패 시 None을 반환합니다.
+
+        Args:
+            ticker (str): 로그 출력용 주식 티커
+            model (str): 호출할 Gemini 모델명
+            payload (dict): API 요청 본문
+            max_retries (int): 최대 재시도 횟수 (기본 3회)
+
+        Returns:
+            Optional[Dict[str, Any]]: 성공 시 분석 결과 딕셔너리, 실패 시 None
+        """
+        url = f"{self.GEMINI_BASE_URL}/{model}:generateContent?key={self.gemini_key}"
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                data = json.dumps(payload).encode("utf-8")
+                req = urllib.request.Request(
+                    url, data=data, headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    res_body = json.loads(response.read().decode("utf-8"))
+                    response_text = (
+                        res_body.get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [{}])[0]
+                        .get("text", "")
+                    ).strip()
+
+                    # Gemini가 ```json ... ``` 마크다운 블록으로 응답할 경우 제거
+                    if response_text.startswith("```"):
+                        lines = response_text.splitlines()
+                        response_text = "\n".join(lines[1:-1]).strip()
+
+                    result = json.loads(response_text)
+                    result["summary"] = self.normalize_text(
+                        result.get("summary", "요약 생성 실패")
+                    )
+                    result["sentiment"] = self.normalize_text(
+                        result.get("sentiment", "중립")
+                    )
+                    print(f"[{ticker}] [{model}] 분석 성공.")
+                    return result
+
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode("utf-8", errors="replace")
+                try:
+                    err_msg = (
+                        json.loads(err_body)
+                        .get("error", {})
+                        .get("message", err_body[:200])
+                    )
+                except json.JSONDecodeError:
+                    err_msg = err_body[:200]
+
+                if e.code == 429:
+                    wait_sec = 8 * (2 ** (attempt - 1))
+                    is_last = attempt == max_retries
+                    if is_last:
+                        # 마지막 시도 실패: 추가 대기 없이 None 반환
+                        print(
+                            f"[{ticker}] [{model}] 429 Rate Limit — "
+                            f"최대 재시도({max_retries}회) 소진. 다음 모델로 전환합니다."
+                        )
+                    else:
+                        print(
+                            f"[{ticker}] [{model}] 429 Rate Limit "
+                            f"(시도 {attempt}/{max_retries}). {wait_sec}초 대기 후 재시도합니다."
+                        )
+                        time.sleep(wait_sec)
+                else:
+                    # 401, 400 등 재시도해도 해결되지 않는 오류는 즉시 중단
+                    print(
+                        f"[{ticker}] [{model}] HTTP {e.code} 오류 (재시도 불필요): {err_msg}"
+                    )
+                    return None
+
+            except Exception as e:
+                print(f"[{ticker}] [{model}] 예외 발생: {e}")
+                return None
+
+        return None
+
+    def analyze_news_with_gemini(self, ticker: str, title: str) -> Dict[str, Any]:
         """
         Gemini LLM API를 호출하여 뉴스의 주가 영향도 감성 분석 및 핵심 요약을 생성합니다.
-        API Key가 없거나 오류 시 Mock 분석 엔진으로 대체합니다.
+        1차 모델(gemini-2.5-flash) 실패 시 2차 모델(gemini-2.0-flash-lite)로 자동 폴백합니다.
+        두 모델 모두 실패 시 로컬 Mock 분석 엔진으로 대체합니다.
 
         Args:
             ticker (str): 주식 티커
@@ -89,14 +181,9 @@ class StockAgent:
         # API 키가 비어있거나 플레이스홀더인 경우 Mock 처리
         if not self.gemini_key or "YOUR_GEMINI_API_KEY" in self.gemini_key:
             print(
-                f"[{ticker}] Gemini API 키가 감지되지 않아 Mock 가상 분석 모드로 수행합니다."
+                f"[{ticker}] Gemini API 키 미설정 — Mock 가상 분석 모드로 수행합니다."
             )
             return self._mock_analysis(ticker, title)
-
-        # Gemini API v1beta 엔드포인트 (gemini-2.5-flash 사용)
-        model = "gemini-2.5-flash"
-        url = "https://generativelanguage.googleapis.com/v1beta/models/"
-        url += f"{model}:generateContent?key={self.gemini_key}"
 
         prompt = (
             f"주식 티커: {ticker}\n"
@@ -109,44 +196,22 @@ class StockAgent:
             '  "summary": "한국어로 번역 요약한 내용 (3문장 이내)"\n'
             "}"
         )
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-        }
+        # ── 1차 시도: PRIMARY_MODEL (gemini-2.5-flash) ──────────────────────
+        result = self._call_gemini_with_retry(ticker, self.PRIMARY_MODEL, payload)
+        if result is not None:
+            return result
 
-        try:
-            data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(
-                url, data=data, headers={"Content-Type": "application/json"}
-            )
-            # gemini-2.5-flash 추론 시간을 고려해 30초로 설정
-            with urllib.request.urlopen(req, timeout=30) as response:
-                res_body = json.loads(response.read().decode("utf-8"))
-                response_text = res_body["candidates"][0]["content"]["parts"][
-                    0
-                ]["text"].strip()
+        # ── 2차 시도: FALLBACK_MODEL (gemini-2.0-flash-lite) ────────────────
+        print(f"[{ticker}] {self.FALLBACK_MODEL} 폴백 모델로 재시도합니다.")
+        result = self._call_gemini_with_retry(ticker, self.FALLBACK_MODEL, payload)
+        if result is not None:
+            return result
 
-                # Gemini가 ```json ... ``` 마크다운 블록으로 응답할 경우 제거
-                if response_text.startswith("```"):
-                    lines = response_text.splitlines()
-                    # 첫 줄(```json)과 마지막 줄(```) 제거
-                    response_text = "\n".join(lines[1:-1]).strip()
-
-                result = json.loads(response_text)
-
-                # 유니코드 정규화 수행
-                result["summary"] = self.normalize_text(
-                    result.get("summary", "요약 생성 실패")
-                )
-                result["sentiment"] = self.normalize_text(
-                    result.get("sentiment", "중립")
-                )
-                return result
-        except Exception as e:
-            print(
-                f"[{ticker}] Gemini API 호출 실패로 인해 Mock 분석으로 대체합니다. 에러: {e}"
-            )
-            return self._mock_analysis(ticker, title)
+        # ── 3차 최종 폴백: 로컬 Mock 분석 엔진 ─────────────────────────────
+        print(f"[{ticker}] 모든 Gemini 모델 호출 실패 — 로컬 Mock 분석으로 대체합니다.")
+        return self._mock_analysis(ticker, title)
 
     def _mock_analysis(self, ticker: str, title: str) -> Dict[str, Any]:
         """
@@ -237,13 +302,14 @@ class StockAgent:
             return False
 
     def build_report_message(
-        self, all_analyses: Dict[str, List[Dict[str, Any]]]
+        self, all_analyses: Dict[str, Dict[str, Any]]
     ) -> str:
         """
-        수집된 분석 결과를 텔레그램 친화적인 HTML 형식으로 구성합니다.
+        티커별 최고 점수 뉴스 1개씩 선별된 분석 결과를
+        텔레그램 친화적인 HTML 형식으로 구성합니다.
 
         Args:
-            all_analyses (Dict[str, List[Dict[str, Any]]]): 티커별 분석 데이터 리스트
+            all_analyses: 티커별 최고점 뉴스 단일 항목 딕셔너리
 
         Returns:
             str: HTML 포맷팅된 최종 메시지
@@ -256,49 +322,59 @@ class StockAgent:
             f"=======================\n",
         ]
 
-        for ticker, analyses in all_analyses.items():
-            msg_lines.append(f"<b>📈 {ticker} 분석 결과</b>")
-            if not analyses:
+        for ticker, item in all_analyses.items():
+            msg_lines.append(f"<b>📈 {ticker} 분석 결과 (최고 점수 뉴스)</b>")
+            if not item:
                 msg_lines.append("수집된 뉴스가 없습니다.\n")
                 continue
 
-            for idx, item in enumerate(analyses, 1):
-                sentiment_emoji = (
-                    "🟢"
-                    if "긍정" in item["sentiment"]
-                    else ("🔴" if "부정" in item["sentiment"] else "⚪")
-                )
-
-                msg_lines.append(
-                    f"<b>{idx}. <a href='{item['link']}'>{item['title']}</a></b>"
-                )
-                msg_lines.append(
-                    f"└ {sentiment_emoji} 영향도: "
-                    f"<b>{item['sentiment']}</b> "
-                    f"(점수: <b>{item['impact_score']}</b>/100)"
-                )
-                msg_lines.append(f"└ 요약: {item['summary']}\n")
+            sentiment_emoji = (
+                "🟢"
+                if "긍정" in item["sentiment"]
+                else ("🔴" if "부정" in item["sentiment"] else "⚪")
+            )
+            msg_lines.append(
+                f"<b><a href='{item['link']}'>{item['title']}</a></b>"
+            )
+            msg_lines.append(
+                f"└ {sentiment_emoji} 영향도: "
+                f"<b>{item['sentiment']}</b> "
+                f"(점수: <b>{item['impact_score']}</b>/100)"
+            )
+            msg_lines.append(f"└ 요약: {item['summary']}\n")
             msg_lines.append("-----------------------")
 
         return "\n".join(msg_lines)
 
     def run_daily_workflow(self) -> None:
-        """일일 전체 뉴스 수집, LLM 분석, 텔레그램 전송 워크플로우를 작동시킵니다."""
+        """일일 전체 뉴스 수집, LLM 분석, 최고 점수 1개 선별 후 텔레그램 전송 워크플로우를 작동시킵니다."""
         print("💡 [StockAgent] 일일 주식 모니터링 워크플로우 시작...")
-        all_analyses: Dict[str, List[Dict[str, Any]]] = {}
+
+        # 티커별 최고 점수 뉴스 단일 항목을 저장
+        all_analyses: Dict[str, Dict[str, Any]] = {}
 
         for ticker in self.tickers:
-            news_items = self.fetch_rss_news(ticker)
+            news_items = self.fetch_rss_news(ticker)   # 3개 수집
             ticker_analyses: List[Dict[str, Any]] = []
 
             for news in news_items:
                 analysis = self.analyze_news_with_gemini(ticker, news["title"])
-                # 원본 뉴스의 링크와 타이틀 매핑
-                analysis["link"] = news["link"]
+                analysis["link"]  = news["link"]
                 analysis["title"] = self.normalize_text(news["title"])
                 ticker_analyses.append(analysis)
+                time.sleep(1)
 
-            all_analyses[ticker] = ticker_analyses
+            # 3개 분석 결과 중 impact_score 가장 높은 1개 선별
+            if ticker_analyses:
+                top = max(ticker_analyses, key=lambda x: x.get("impact_score", 0))
+                print(
+                    f"[{ticker}] 최고 점수 뉴스 선별: "
+                    f"'{top['title'][:40]}...' "
+                    f"(점수: {top['impact_score']}/100)"
+                )
+                all_analyses[ticker] = top
+            else:
+                all_analyses[ticker] = {}
 
         report = self.build_report_message(all_analyses)
         self.send_telegram_message(report)

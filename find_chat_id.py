@@ -44,7 +44,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     print("✅  Chat ID를 찾았습니다!")
     print("=" * 50)
     print(f"  Chat ID   : {chat.id}")
-    print(f"  Chat 유형  : {chat.type}")          # private / group / supergroup / channel
+    print(f"  Chat 유형  : {chat.type}")
     print(f"  보낸 사람   : {user.full_name} (@{user.username})")
     print("=" * 50)
     print("\n👉 .env 파일에 아래 값을 붙여넣으세요:")
@@ -68,7 +68,9 @@ def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     if not token or token == "your_telegram_bot_token_here":
         print("[오류] .env 파일에 유효한 TELEGRAM_BOT_TOKEN이 없습니다.")
-        print("       BotFather(https://t.me/BotFather)에서 토큰을 발급받아 입력하세요.")
+        print(
+            "       BotFather(https://t.me/BotFather)에서 토큰을 발급받아 입력하세요."
+        )
         sys.exit(1)
 
     print("\n" + "=" * 50)

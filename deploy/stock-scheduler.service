@@ -1,0 +1,32 @@
+[Unit]
+Description=Stock Monitor Scheduler — 미국 주식 일일 모니터링 서비스
+# 네트워크가 완전히 올라온 뒤 시작
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# ──────────────────────────────────────────────────────
+# ✏️  아래 3줄을 실제 우분투 서버 환경에 맞게 수정하세요.
+# ──────────────────────────────────────────────────────
+User=ubuntu
+WorkingDirectory=/home/ubuntu/stock_monitor
+ExecStart=/home/ubuntu/stock_monitor/.venv/bin/python scheduler.py
+# ──────────────────────────────────────────────────────
+
+# 비정상 종료 시 5초 후 자동 재시작
+Restart=on-failure
+RestartSec=5
+
+# 표준 출력·에러를 journald 로그로 저장 (journalctl -u stock-scheduler 로 확인)
+StandardOutput=journal
+StandardError=journal
+
+# 환경변수: .env 파일을 WorkingDirectory 기준으로 자동 로드하므로 별도 설정 불필요
+# 추가 환경변수가 필요하면 아래 주석 해제 후 사용
+# Environment="PYTHONIOENCODING=utf-8"
+# EnvironmentFile=/home/ubuntu/stock_monitor/.env
+
+[Install]
+WantedBy=multi-user.target
