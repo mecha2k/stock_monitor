@@ -382,54 +382,40 @@ class StockAgent:
             if close_price is not None:
                 msg_lines.append(f"💰 종가: <b>${close_price:,.2f}</b>")
 
-                # ─ 매수 희망가 비교 (buy_price > 0)
+                # 희망가 정보 한 줄 출력
+                target_parts = []
                 if buy_price > 0:
-                    buy_ratio = (close_price / buy_price) * 100
-                    buy_diff = close_price - buy_price
-                    if close_price <= buy_price:
-                        # ✅ 매수 희망가 도달 또는 하회 — 강조 알림
-                        msg_lines.append(
-                            f"🛒 매수 희망가: <b>${buy_price:,.2f}</b>  "
-                            f"(현재가/희망가 <b>{buy_ratio:.1f}%</b>)"
-                        )
-                        msg_lines.append(
-                            "🎯🔥 <b>매수 희망가 도달! 지금이 매수 타이밍입니다!</b>"
-                        )
-                    else:
-                        # ⏳ 매수 희망가 미달성 — 잔여 금액 안내
-                        msg_lines.append(
-                            f"🛒 매수 희망가: <b>${buy_price:,.2f}</b>  "
-                            f"(현재가/희망가 <b>{buy_ratio:.1f}%</b>, "
-                            f"희망가까지 <b>+${buy_diff:,.2f}</b> 남음)"
-                        )
-
-                # ─ 매도 희망가 비교 (sell_price > 0)
+                    buy_str = f"{buy_price:,.0f}" if buy_price.is_integer() else f"{buy_price:,.2f}"
+                    target_parts.append(f"🛒 매수 (${buy_str})")
                 if sell_price > 0:
-                    sell_ratio = (close_price / sell_price) * 100
-                    sell_diff = sell_price - close_price
-                    if close_price >= sell_price:
-                        # ✅ 매도 희망가 도달 또는 초과 — 강조 알림
-                        msg_lines.append(
-                            f"📈 매도 희망가: <b>${sell_price:,.2f}</b>  "
-                            f"(현재가/희망가 <b>{sell_ratio:.1f}%</b>)"
-                        )
-                        msg_lines.append(
-                            "🚀💰 <b>매도 희망가 도달! 지금이 매도 타이밍입니다!</b>"
-                        )
-                    else:
-                        # ⏳ 매도 희망가 미달성 — 잔여 금액 안내
-                        msg_lines.append(
-                            f"📈 매도 희망가: <b>${sell_price:,.2f}</b>  "
-                            f"(현재가/희망가 <b>{sell_ratio:.1f}%</b>, "
-                            f"희망가까지 <b>-${sell_diff:,.2f}</b> 남음)"
-                        )
+                    sell_str = f"{sell_price:,.0f}" if sell_price.is_integer() else f"{sell_price:,.2f}"
+                    target_parts.append(f"📈 매도 (${sell_str})")
+                if target_parts:
+                    msg_lines.append(f"희망가 : {', '.join(target_parts)}")
+
+                # 매수 희망가 도달 체크 (희망가 +5% 이하)
+                if buy_price > 0 and close_price <= buy_price * 1.05:
+                    msg_lines.append(
+                        "🎯🔥 <b>매수 희망가 도달! 지금이 매수 타이밍입니다!</b>"
+                    )
+
+                # 매도 희망가 도달 체크 (희망가 -5% 이상)
+                if sell_price > 0 and close_price >= sell_price * 0.95:
+                    msg_lines.append(
+                        "🚀💰 <b>매도 희망가 도달! 지금이 매도 타이밍입니다!</b>"
+                    )
 
             else:
                 msg_lines.append("💰 종가: <i>수집 실패</i>")
+                target_parts = []
                 if buy_price > 0:
-                    msg_lines.append(f"🛒 매수 희망가: ${buy_price:,.2f}")
+                    buy_str = f"{buy_price:,.0f}" if buy_price.is_integer() else f"{buy_price:,.2f}"
+                    target_parts.append(f"🛒 매수 (${buy_str})")
                 if sell_price > 0:
-                    msg_lines.append(f"📈 매도 희망가: ${sell_price:,.2f}")
+                    sell_str = f"{sell_price:,.0f}" if sell_price.is_integer() else f"{sell_price:,.2f}"
+                    target_parts.append(f"📈 매도 (${sell_str})")
+                if target_parts:
+                    msg_lines.append(f"희망가 : {', '.join(target_parts)}")
 
             msg_lines.append("")
 
@@ -513,12 +499,12 @@ class StockAgent:
             # 희망가 도달 여부 콘솔 출력
             if close_price is not None:
                 if buy_price > 0:
-                    if close_price <= buy_price:
+                    if close_price <= buy_price * 1.05:
                         print(f"[{ticker}] 🎯🔥 매수 희망가 도달! ")
                     else:
                         print(f"[{ticker}] ⏳ 매수 희망가 미달성. ")
                 if sell_price > 0:
-                    if close_price >= sell_price:
+                    if close_price >= sell_price * 0.95:
                         print(f"[{ticker}] 🚀💰 매도 희망가 도달! ")
                     else:
                         print(f"[{ticker}] ⏳ 매도 희망가 미달성. ")

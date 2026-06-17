@@ -31,7 +31,7 @@ except ImportError:
 #    - sell_price : 매도 희망가 (USD). 종가 ≥ sell_price 시 매도 알림. 0.0 = 비활성화
 # ──────────────────────────────────────────────
 TARGET_STOCKS: List[Dict[str, Any]] = [
-    {"ticker": "AAPL", "buy_price": 260.0, "sell_price": 400.0},
+    {"ticker": "AAPL", "buy_price": 300.0, "sell_price": 400.0},
     {"ticker": "GOOGL", "buy_price": 340.0, "sell_price": 500.0},
     {"ticker": "TSLA", "buy_price": 380.0, "sell_price": 500.0},
     {"ticker": "RDDT", "buy_price": 100.0, "sell_price": 210.0},  # Reddit 매도 희망가
@@ -56,7 +56,9 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
 # 4. Alpha Vantage API 설정
 #    실시간 기업 뉴스 수집용 API 키 (무료: 일 25회)
 # ──────────────────────────────────────────────
-ALPHA_VANTAGE_API_KEY: str = os.getenv("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHAVANTAGE_API_KEY_HERE")
+ALPHA_VANTAGE_API_KEY: str = os.getenv(
+    "ALPHA_VANTAGE_API_KEY", "YOUR_ALPHAVANTAGE_API_KEY_HERE"
+)
 
 # ──────────────────────────────────────────────
 # 5. 알림 발송 시각 (KST 기준, 24시간 형식)
