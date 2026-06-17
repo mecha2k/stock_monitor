@@ -7,7 +7,6 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
 import urllib.request
 import urllib.parse
-import feedparser
 import config
 
 # Windows CP949 터미널 인코딩 오류 방지 (print 시 이모지 깨짐 현상 예방)
@@ -28,10 +27,12 @@ class StockAgent:
 
     def __init__(self) -> None:
         """StockAgent 클래스의 생성자입니다."""
-        self.tickers: List[str] = config.TARGET_STOCKS
+        # config.TARGET_STOCKS가 딕셔너리 리스트로 변경됨
+        self.stock_configs: List[Dict[str, Any]] = config.TARGET_STOCKS
         self.bot_token: str = config.TELEGRAM_BOT_TOKEN
         self.chat_id: str = config.TELEGRAM_CHAT_ID
         self.gemini_key: str = config.GEMINI_API_KEY
+        self.alpha_vantage_key: str = getattr(config, "ALPHA_VANTAGE_API_KEY", "")
 
     def normalize_text(self, text: str) -> str:
         """
@@ -47,9 +48,44 @@ class StockAgent:
             return ""
         return unicodedata.normalize("NFC", text)
 
-    def fetch_rss_news(self, ticker: str) -> List[Dict[str, Any]]:
+    def fetch_stock_price(self, ticker: str) -> Optional[float]:
         """
-        Yahoo Finance RSS 피드를 통해 특정 주식 티커의 최신 뉴스를 수집합니다.
+        yfinance를 사용하여 해당 티커의 전일 종가(Close Price)를 조회합니다.
+        장 마감 전에 실행될 경우 당일 가장 최근 가격을 반환합니다.
+
+        Args:
+            ticker (str): 주식 티커 (예: "AAPL")
+
+        Returns:
+            Optional[float]: 종가(USD). 조회 실패 시 None 반환
+        """
+        try:
+            import yfinance as yf
+
+            stock = yf.Ticker(ticker)
+            # 최근 2일치 일봉 데이터를 가져와 가장 최근 종가 반환
+            hist = stock.history(period="2d")
+            if hist.empty:
+                print(f"[{ticker}] 종가 데이터가 없습니다.")
+                return None
+
+            close_price = float(hist["Close"].iloc[-1])
+            print(f"[{ticker}] 최근 종가: ${close_price:.2f}")
+            return close_price
+
+        except ImportError:
+            print(
+                f"[{ticker}] yfinance 미설치 — 종가 수집을 건너뜁니다. "
+                "(설치: conda run -n trading pip install yfinance)"
+            )
+            return None
+        except Exception as e:
+            print(f"[{ticker}] 종가 수집 실패: {e}")
+            return None
+
+    def fetch_alphavantage_news(self, ticker: str) -> List[Dict[str, Any]]:
+        """
+        Alpha Vantage API를 통해 특정 주식 티커의 최신 뉴스를 수집합니다.
 
         Args:
             ticker (str): 주식 티커 (예: "AAPL")
@@ -57,25 +93,38 @@ class StockAgent:
         Returns:
             List[Dict[str, Any]]: 수집된 최신 뉴스 목록 (최대 3개)
         """
-        rss_url = f"https://finance.yahoo.com/rss/headline?s={ticker}"
-        print(f"[{ticker}] RSS 피드 수집 중: {rss_url}")
+        if not self.alpha_vantage_key or "YOUR_ALPHAVANTAGE_API_KEY_HERE" in self.alpha_vantage_key:
+            print(f"[{ticker}] Alpha Vantage API 키가 없어 뉴스 수집을 건너뜁니다.")
+            return []
+
+        # limit=3 파라미터로 최신 3개만 요청
+        url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={ticker}&limit=3&apikey={self.alpha_vantage_key}"
+        print(f"[{ticker}] Alpha Vantage 뉴스 수집 중...")
 
         try:
-            feed = feedparser.parse(rss_url)
-            news_list: List[Dict[str, Any]] = []
+            # 403 Forbidden 등 방화벽 차단을 우회하기 위해 User-Agent 명시
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
 
-            # 최신 뉴스 최대 3개만 추출
-            for entry in feed.entries[:3]:
+            news_list: List[Dict[str, Any]] = []
+            feed = res_data.get("feed", [])
+
+            for entry in feed[:3]:
                 news_list.append(
                     {
                         "title": entry.get("title", "제목 없음"),
-                        "link": entry.get("link", "#"),
-                        "published": entry.get("published", "시간 정보 없음"),
+                        "link": entry.get("url", "#"),
+                        "published": entry.get("time_published", "시간 정보 없음"),
+                        "summary_source": entry.get("summary", ""),
                     }
                 )
             return news_list
+        except urllib.error.HTTPError as e:
+            print(f"[{ticker}] Alpha Vantage API 호출 실패 (HTTP {e.code}): {e.read().decode('utf-8', errors='replace')}")
+            return []
         except Exception as e:
-            print(f"[{ticker}] 뉴스 수집 실패: {e}")
+            print(f"[{ticker}] Alpha Vantage 뉴스 수집 실패: {e}")
             return []
 
     def _call_gemini_with_retry(
@@ -165,7 +214,7 @@ class StockAgent:
 
         return None
 
-    def analyze_news_with_gemini(self, ticker: str, title: str) -> Dict[str, Any]:
+    def analyze_news_with_gemini(self, ticker: str, title: str, summary_source: str = "") -> Dict[str, Any]:
         """
         Gemini LLM API를 호출하여 뉴스의 주가 영향도 감성 분석 및 핵심 요약을 생성합니다.
         1차 모델(gemini-2.5-flash) 실패 시 2차 모델(gemini-2.0-flash-lite)로 자동 폴백합니다.
@@ -174,6 +223,7 @@ class StockAgent:
         Args:
             ticker (str): 주식 티커
             title (str): 영문 뉴스 제목
+            summary_source (str): Finnhub 등에서 제공받은 영문 뉴스 요약문 (선택 사항)
 
         Returns:
             Dict[str, Any]: 감성 분석 결과 및 요약 딕셔너리
@@ -187,7 +237,8 @@ class StockAgent:
 
         prompt = (
             f"주식 티커: {ticker}\n"
-            f"뉴스 제목: {title}\n\n"
+            f"뉴스 제목: {title}\n"
+            f"뉴스 원문 요약: {summary_source}\n\n"
             "위의 영문 뉴스가 해당 주가에 미칠 단기적 영향을 분석하고 반드시 한국어로만 대답해주세요.\n"
             "JSON 형식:\n"
             "{\n"
@@ -301,15 +352,13 @@ class StockAgent:
             print(f"텔레그램 전송 실패: {e}")
             return False
 
-    def build_report_message(
-        self, all_analyses: Dict[str, Dict[str, Any]]
-    ) -> str:
+    def build_report_message(self, all_analyses: Dict[str, Dict[str, Any]]) -> str:
         """
-        티커별 최고 점수 뉴스 1개씩 선별된 분석 결과를
-        텔레그램 친화적인 HTML 형식으로 구성합니다.
+        티커별 최고 점수 뉴스 1개씩 선별된 분석 결과와
+        종가 / 매수·매도 희망가 비교 정보를 텔레그램 친화적인 HTML 형식으로 구성합니다.
 
         Args:
-            all_analyses: 티커별 최고점 뉴스 단일 항목 딕셔너리
+            all_analyses: 티커별 분석 및 가격 정보 딕셔너리
 
         Returns:
             str: HTML 포맷팅된 최종 메시지
@@ -323,48 +372,126 @@ class StockAgent:
         ]
 
         for ticker, item in all_analyses.items():
-            msg_lines.append(f"<b>📈 {ticker} 분석 결과 (최고 점수 뉴스)</b>")
-            if not item:
-                msg_lines.append("수집된 뉴스가 없습니다.\n")
-                continue
+            msg_lines.append(f"<b>📈 {ticker}</b>")
 
-            sentiment_emoji = (
-                "🟢"
-                if "긍정" in item["sentiment"]
-                else ("🔴" if "부정" in item["sentiment"] else "⚪")
-            )
-            msg_lines.append(
-                f"<b><a href='{item['link']}'>{item['title']}</a></b>"
-            )
-            msg_lines.append(
-                f"└ {sentiment_emoji} 영향도: "
-                f"<b>{item['sentiment']}</b> "
-                f"(점수: <b>{item['impact_score']}</b>/100)"
-            )
-            msg_lines.append(f"└ 요약: {item['summary']}\n")
+            # ── 종가 / 매수·매도 희망가 섹션 ─────────────────────────────
+            close_price: Optional[float] = item.get("close_price")
+            buy_price: float = item.get("buy_price", 0.0)
+            sell_price: float = item.get("sell_price", 0.0)
+
+            if close_price is not None:
+                msg_lines.append(f"💰 종가: <b>${close_price:,.2f}</b>")
+
+                # ─ 매수 희망가 비교 (buy_price > 0)
+                if buy_price > 0:
+                    buy_ratio = (close_price / buy_price) * 100
+                    buy_diff = close_price - buy_price
+                    if close_price <= buy_price:
+                        # ✅ 매수 희망가 도달 또는 하회 — 강조 알림
+                        msg_lines.append(
+                            f"🛒 매수 희망가: <b>${buy_price:,.2f}</b>  "
+                            f"(현재가/희망가 <b>{buy_ratio:.1f}%</b>)"
+                        )
+                        msg_lines.append(
+                            "🎯🔥 <b>매수 희망가 도달! 지금이 매수 타이밍입니다!</b>"
+                        )
+                    else:
+                        # ⏳ 매수 희망가 미달성 — 잔여 금액 안내
+                        msg_lines.append(
+                            f"🛒 매수 희망가: <b>${buy_price:,.2f}</b>  "
+                            f"(현재가/희망가 <b>{buy_ratio:.1f}%</b>, "
+                            f"희망가까지 <b>+${buy_diff:,.2f}</b> 남음)"
+                        )
+
+                # ─ 매도 희망가 비교 (sell_price > 0)
+                if sell_price > 0:
+                    sell_ratio = (close_price / sell_price) * 100
+                    sell_diff = sell_price - close_price
+                    if close_price >= sell_price:
+                        # ✅ 매도 희망가 도달 또는 초과 — 강조 알림
+                        msg_lines.append(
+                            f"📈 매도 희망가: <b>${sell_price:,.2f}</b>  "
+                            f"(현재가/희망가 <b>{sell_ratio:.1f}%</b>)"
+                        )
+                        msg_lines.append(
+                            "🚀💰 <b>매도 희망가 도달! 지금이 매도 타이밍입니다!</b>"
+                        )
+                    else:
+                        # ⏳ 매도 희망가 미달성 — 잔여 금액 안내
+                        msg_lines.append(
+                            f"📈 매도 희망가: <b>${sell_price:,.2f}</b>  "
+                            f"(현재가/희망가 <b>{sell_ratio:.1f}%</b>, "
+                            f"희망가까지 <b>-${sell_diff:,.2f}</b> 남음)"
+                        )
+
+            else:
+                msg_lines.append("💰 종가: <i>수집 실패</i>")
+                if buy_price > 0:
+                    msg_lines.append(f"🛒 매수 희망가: ${buy_price:,.2f}")
+                if sell_price > 0:
+                    msg_lines.append(f"📈 매도 희망가: ${sell_price:,.2f}")
+
+            msg_lines.append("")
+
+            # ── 뉴스 분석 섹션 ────────────────────────────────────────────
+            if not item.get("title"):
+                msg_lines.append("📰 수집된 뉴스가 없습니다.\n")
+            else:
+                sentiment_emoji = (
+                    "🟢"
+                    if "긍정" in item["sentiment"]
+                    else ("🔴" if "부정" in item["sentiment"] else "⚪")
+                )
+                msg_lines.append(
+                    f"📰 <b><a href='{item['link']}'>{item['title']}</a></b>"
+                )
+                msg_lines.append(
+                    f"└ {sentiment_emoji} 영향도: "
+                    f"<b>{item['sentiment']}</b> "
+                    f"(점수: <b>{item['impact_score']}</b>/100)"
+                )
+                msg_lines.append(f"└ 요약: {item['summary']}\n")
+
             msg_lines.append("-----------------------")
 
         return "\n".join(msg_lines)
 
     def run_daily_workflow(self) -> None:
-        """일일 전체 뉴스 수집, LLM 분석, 최고 점수 1개 선별 후 텔레그램 전송 워크플로우를 작동시킵니다."""
+        """일일 전체 뉴스 수집, 종가 조회, 매수/매도 희망가 비교, LLM 분석,
+        최고 점수 1개 선별 후 텔레그램 전송 워크플로우를 작동시킵니다."""
         print("💡 [StockAgent] 일일 주식 모니터링 워크플로우 시작...")
 
-        # 티커별 최고 점수 뉴스 단일 항목을 저장
+        # 티커별 최고 점수 뉴스 단일 항목 + 가격 정보를 저장
         all_analyses: Dict[str, Dict[str, Any]] = {}
 
-        for ticker in self.tickers:
-            news_items = self.fetch_rss_news(ticker)   # 3개 수집
+        for stock_cfg in self.stock_configs:
+            ticker: str = stock_cfg["ticker"]
+            buy_price: float = stock_cfg.get("buy_price", 0.0)
+            sell_price: float = stock_cfg.get("sell_price", 0.0)
+
+            price_info = []
+            if buy_price > 0:
+                price_info.append(f"매수 ${buy_price:,.2f}")
+            if sell_price > 0:
+                price_info.append(f"매도 ${sell_price:,.2f}")
+            price_desc = "  /  ".join(price_info) if price_info else "희망가 미설정"
+            print(f"\n── [{ticker}] 처리 시작 ({price_desc}) ──")
+
+            # 1) 종가 수집
+            close_price = self.fetch_stock_price(ticker)
+
+            # 2) 뉴스 수집 및 분석
+            news_items = self.fetch_alphavantage_news(ticker)
             ticker_analyses: List[Dict[str, Any]] = []
 
             for news in news_items:
-                analysis = self.analyze_news_with_gemini(ticker, news["title"])
-                analysis["link"]  = news["link"]
+                analysis = self.analyze_news_with_gemini(ticker, news["title"], news.get("summary_source", ""))
+                analysis["link"] = news["link"]
                 analysis["title"] = self.normalize_text(news["title"])
                 ticker_analyses.append(analysis)
                 time.sleep(1)
 
-            # 3개 분석 결과 중 impact_score 가장 높은 1개 선별
+            # 3) impact_score 최고 뉴스 1개 선별
             if ticker_analyses:
                 top = max(ticker_analyses, key=lambda x: x.get("impact_score", 0))
                 print(
@@ -372,13 +499,33 @@ class StockAgent:
                     f"'{top['title'][:40]}...' "
                     f"(점수: {top['impact_score']}/100)"
                 )
+                top["close_price"] = close_price
+                top["buy_price"] = buy_price
+                top["sell_price"] = sell_price
                 all_analyses[ticker] = top
             else:
-                all_analyses[ticker] = {}
+                all_analyses[ticker] = {
+                    "close_price": close_price,
+                    "buy_price": buy_price,
+                    "sell_price": sell_price,
+                }
+
+            # 희망가 도달 여부 콘솔 출력
+            if close_price is not None:
+                if buy_price > 0:
+                    if close_price <= buy_price:
+                        print(f"[{ticker}] 🎯🔥 매수 희망가 도달! ")
+                    else:
+                        print(f"[{ticker}] ⏳ 매수 희망가 미달성. ")
+                if sell_price > 0:
+                    if close_price >= sell_price:
+                        print(f"[{ticker}] 🚀💰 매도 희망가 도달! ")
+                    else:
+                        print(f"[{ticker}] ⏳ 매도 희망가 미달성. ")
 
         report = self.build_report_message(all_analyses)
         self.send_telegram_message(report)
-        print("💡 [StockAgent] 워크플로우 완료.")
+        print("\n💡 [StockAgent] 워크플로우 완료.")
 
 
 # 로컬 테스트용

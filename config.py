@@ -10,7 +10,7 @@ config.py
 """
 
 import os
-from typing import List
+from typing import List, Dict, Any
 from pathlib import Path
 
 # python-dotenv를 통해 프로젝트 루트의 .env 파일을 자동 로드합니다.
@@ -25,9 +25,17 @@ except ImportError:
     pass
 
 # ──────────────────────────────────────────────
-# 1. 모니터링 대상 주식 티커 목록
+# 1. 모니터링 대상 주식 목록 + 매수/매도 희망가 설정
+#    - ticker     : 주식 티커 심볼 (예: "AAPL")
+#    - buy_price  : 매수 희망가 (USD). 종가 ≤ buy_price  시 매수 알림. 0.0 = 비활성화
+#    - sell_price : 매도 희망가 (USD). 종가 ≥ sell_price 시 매도 알림. 0.0 = 비활성화
 # ──────────────────────────────────────────────
-TARGET_STOCKS: List[str] = ["AAPL", "GOOGL", "TSLA"]
+TARGET_STOCKS: List[Dict[str, Any]] = [
+    {"ticker": "AAPL", "buy_price": 260.0, "sell_price": 400.0},
+    {"ticker": "GOOGL", "buy_price": 340.0, "sell_price": 500.0},
+    {"ticker": "TSLA", "buy_price": 380.0, "sell_price": 500.0},
+    {"ticker": "RDDT", "buy_price": 100.0, "sell_price": 210.0},  # Reddit 매도 희망가
+]
 
 # ──────────────────────────────────────────────
 # 2. Telegram Bot API 설정
@@ -36,9 +44,7 @@ TARGET_STOCKS: List[str] = ["AAPL", "GOOGL", "TSLA"]
 TELEGRAM_BOT_TOKEN: str = os.getenv(
     "TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE"
 )
-TELEGRAM_CHAT_ID: str = os.getenv(
-    "TELEGRAM_CHAT_ID", "YOUR_TELEGRAM_CHAT_ID_HERE"
-)
+TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "YOUR_TELEGRAM_CHAT_ID_HERE")
 
 # ──────────────────────────────────────────────
 # 3. Google Gemini API 설정
@@ -47,6 +53,12 @@ TELEGRAM_CHAT_ID: str = os.getenv(
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
 
 # ──────────────────────────────────────────────
-# 4. 알림 발송 시각 (KST 기준, 24시간 형식)
+# 4. Alpha Vantage API 설정
+#    실시간 기업 뉴스 수집용 API 키 (무료: 일 25회)
+# ──────────────────────────────────────────────
+ALPHA_VANTAGE_API_KEY: str = os.getenv("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHAVANTAGE_API_KEY_HERE")
+
+# ──────────────────────────────────────────────
+# 5. 알림 발송 시각 (KST 기준, 24시간 형식)
 # ──────────────────────────────────────────────
 NOTIFICATION_TIME: str = "08:00"
