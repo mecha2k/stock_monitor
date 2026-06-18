@@ -3,10 +3,12 @@
 
 ## 1. Python 환경
 
-- **conda 환경**: `trading` 환경을 항상 사용합니다.
-  - Python 인터프리터 경로: `c:\Users\mecha2k\.conda\envs\trading\python.exe`
-- **패키지 설치**: `pip install` 사용 (conda install 사용 금지)
-- **실행 방식**: VS Code 디버거 또는 PowerShell에서 직접 실행
+- **Python 환경**: 메모리/용량 절약을 위해 conda를 사용하지 않고 standard Python 가상환경(`.venv`)과 `uv` 패키지 매니저를 사용합니다.
+  - Python 인터프리터 경로:
+    - Linux/macOS: `./.venv/bin/python`
+    - Windows: `.\.venv\Scripts\python.exe`
+- **패키지 설치**: `uv pip install <패키지>` 사용
+- **실행 방식**: `uv run python <스크립트>` 또는 가상환경 내의 Python 인터프리터로 직접 실행
 
 ## 2. 코드 스타일
 

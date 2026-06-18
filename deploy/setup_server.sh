@@ -21,31 +21,38 @@ echo "=================================================="
 echo "  Stock Monitor — 서버 초기 환경 설정"
 echo "=================================================="
 
-# 1. Python 3 및 pip 설치 확인
-echo "[1/5] Python 3 확인 및 설치..."
+# 1. Python 3 및 uv 설치 확인
+echo "[1/5] Python 3 및 uv 확인..."
 sudo apt-get update -q
-sudo apt-get install -y python3 python3-pip python3-venv
+sudo apt-get install -y python3 python3-pip curl
+
+if ! command -v uv &> /dev/null; then
+    echo "  → uv가 존재하지 않아 설치를 시작합니다..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # PATH에 uv 추가
+    export PATH="${HOME}/.local/bin:${PATH}"
+fi
 
 PYTHON_VER=$(python3 --version)
-echo "  → ${PYTHON_VER} 설치 확인"
+UV_VER=$(uv --version)
+echo "  → ${PYTHON_VER} / ${UV_VER} 설치 확인"
 
 # 2. 프로젝트 디렉터리 이동
 cd "${PROJECT_DIR}"
 echo "[2/5] 프로젝트 디렉터리: ${PROJECT_DIR}"
 
 # 3. 가상환경 생성
-echo "[3/5] 가상환경(venv) 생성..."
+echo "[3/5] 가상환경(.venv) 생성..."
 if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
-    echo "  → .venv 생성 완료"
+    uv venv .venv
+    echo "  → .venv 생성 완료 (uv)"
 else
     echo "  → .venv 이미 존재, 건너뜁니다."
 fi
 
 # 4. 패키지 설치
 echo "[4/5] 의존성 패키지 설치 (requirements.txt)..."
-.venv/bin/pip install --upgrade pip -q
-.venv/bin/pip install -r requirements.txt -q
+uv pip install -r requirements.txt -q
 echo "  → 설치 완료"
 
 # 5. .env 파일 존재 여부 확인

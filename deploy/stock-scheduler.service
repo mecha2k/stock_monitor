@@ -11,8 +11,8 @@ Type=simple
 # ✏️  아래 3줄을 실제 우분투 서버 환경에 맞게 수정하세요.
 # ──────────────────────────────────────────────────────
 User=ubuntu
-WorkingDirectory=/home/ubuntu/stock_monitor
-ExecStart=/home/ubuntu/stock_monitor/.venv/bin/python scheduler.py
+WorkingDirectory=/home/ubuntu/codes/antigravity/stock_monitor
+ExecStart=/home/ubuntu/codes/antigravity/stock_monitor/.venv/bin/python -u scheduler.py
 # ──────────────────────────────────────────────────────
 
 # 비정상 종료 시 5초 후 자동 재시작

@@ -76,7 +76,7 @@ class StockAgent:
         except ImportError:
             print(
                 f"[{ticker}] yfinance 미설치 — 종가 수집을 건너뜁니다. "
-                "(설치: conda run -n trading pip install yfinance)"
+                "(설치: uv pip install yfinance)"
             )
             return None
         except Exception as e:

@@ -9,7 +9,7 @@
 | 항목 | 내용 |
 |---|---|
 | **목적** | 지정된 미국 주식 티커의 최신 뉴스를 RSS로 수집하고 Gemini LLM으로 감성 분석 후 텔레그램 알림 발송 |
-| **실행 환경** | Windows / conda 가상환경 `trading` |
+| **실행 환경** | standard Python 가상환경 (`.venv`, uv 관리) |
 | **Python 버전** | Python 3.x (PEP 8 / Type Hinting 준수) |
 | **알림 시각** | 매일 오전 08:00 KST (설정 변경 가능) |
 | **핵심 라이브러리** | `python-telegram-bot v22.7`, `feedparser`, `python-dotenv` |
@@ -185,11 +185,9 @@ python scheduler.py
 ### 5.1 환경 설정
 
 ```bash
-# conda trading 환경 활성화
-conda activate trading
-
-# 의존성 설치
-pip install -r requirements.txt
+# 가상환경 생성 및 의존성 설치 (uv를 사용하여 메모리 및 디스크 용량 최소화)
+uv venv .venv
+uv pip install -r requirements.txt
 ```
 
 ### 5.2 `.env` 파일 설정
@@ -205,7 +203,11 @@ GEMINI_API_KEY=AIzaSy_실제_키
 ### 5.3 봇 연결 테스트
 
 ```bash
-conda run -n trading python telegram_bot.py
+# uv run을 사용하여 가상환경 활성화 없이 즉시 실행:
+uv run python telegram_bot.py
+# 또는 직접 가상환경 내의 인터프리터 사용:
+# Linux/macOS: ./.venv/bin/python telegram_bot.py
+# Windows: .\.venv\Scripts\python.exe telegram_bot.py
 ```
 
 텔레그램에서 테스트 메시지가 수신되면 정상입니다.
@@ -213,13 +215,13 @@ conda run -n trading python telegram_bot.py
 ### 5.4 즉시 1회 실행 (테스트)
 
 ```bash
-conda run -n trading python stock_agent.py
+uv run python stock_agent.py
 ```
 
 ### 5.5 스케줄러 상시 실행
 
 ```bash
-conda run -n trading python scheduler.py
+uv run python scheduler.py
 ```
 
 ---
