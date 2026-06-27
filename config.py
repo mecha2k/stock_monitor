@@ -31,10 +31,14 @@ except ImportError:
 #    - sell_price : 매도 희망가 (USD). 종가 ≥ sell_price 시 매도 알림. 0.0 = 비활성화
 # ──────────────────────────────────────────────
 TARGET_STOCKS: List[Dict[str, Any]] = [
-    {"ticker": "AAPL", "buy_price": 300.0, "sell_price": 400.0},
-    {"ticker": "GOOGL", "buy_price": 340.0, "sell_price": 500.0},
-    {"ticker": "TSLA", "buy_price": 380.0, "sell_price": 500.0},
-    {"ticker": "RDDT", "buy_price": 100.0, "sell_price": 210.0},  # Reddit 매도 희망가
+    {"ticker": "AAPL", "buy_price": 240.0, "sell_price": 400.0},
+    {"ticker": "GOOGL", "buy_price": 240.0, "sell_price": 500.0},
+    {"ticker": "TSLA", "buy_price": 340.0, "sell_price": 500.0},
+    {
+        "ticker": "RDDT",
+        "buy_price": 100.0,
+        "sell_price": 210.0,
+    },  # Reddit 매도 희망가
 ]
 
 # ──────────────────────────────────────────────
@@ -44,7 +48,9 @@ TARGET_STOCKS: List[Dict[str, Any]] = [
 TELEGRAM_BOT_TOKEN: str = os.getenv(
     "TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE"
 )
-TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "YOUR_TELEGRAM_CHAT_ID_HERE")
+TELEGRAM_CHAT_ID: str = os.getenv(
+    "TELEGRAM_CHAT_ID", "YOUR_TELEGRAM_CHAT_ID_HERE"
+)
 
 # ──────────────────────────────────────────────
 # 3. Google Gemini API 설정
