@@ -31,15 +31,101 @@ except ImportError:
 #    - sell_price : 매도 희망가 (USD). 종가 ≥ sell_price 시 매도 알림. 0.0 = 비활성화
 # ──────────────────────────────────────────────
 TARGET_STOCKS: List[Dict[str, Any]] = [
-    {"ticker": "AAPL", "buy_price": 240.0, "sell_price": 400.0},
-    {"ticker": "GOOGL", "buy_price": 240.0, "sell_price": 500.0},
-    {"ticker": "TSLA", "buy_price": 340.0, "sell_price": 500.0},
+    {
+        "ticker": "AAPL",
+        "buy_price": 240.0,
+        "sell_price": 400.0,
+        "keywords": [
+            "apple",
+            "aapl",
+            "iphone",
+            "ipad",
+            "mac",
+            "ios",
+            "tim cook",
+        ],
+    },
+    {
+        "ticker": "GOOGL",
+        "buy_price": 240.0,
+        "sell_price": 500.0,
+        "keywords": [
+            "google",
+            "googl",
+            "alphabet",
+            "android",
+            "gemini",
+            "sundar pichai",
+        ],
+    },
+    {
+        "ticker": "TSLA",
+        "buy_price": 340.0,
+        "sell_price": 500.0,
+        "keywords": [
+            "tesla",
+            "tsla",
+            "elon musk",
+            "musk",
+            "model s",
+            "model 3",
+            "model x",
+            "model y",
+            "cybertruck",
+        ],
+    },
     {
         "ticker": "RDDT",
         "buy_price": 100.0,
         "sell_price": 210.0,
-    },  # Reddit 매도 희망가
+        "keywords": ["reddit", "rddt", "steve huffman", "huffman"],
+    },
+    {
+        "ticker": "AMZN",
+        "buy_price": 220.0,
+        "sell_price": 320.0,
+        "keywords": ["amazon", "amzn", "aws", "bezos", "andy jassy"],
+    },
+    {
+        "ticker": "SPACEX",
+        "buy_price": 100.0,
+        "sell_price": 200.0,
+        "keywords": [
+            "spacex",
+            "space exploration technologies",
+            "starship",
+            "falcon",
+            "musk",
+        ],
+    },
+    {
+        "ticker": "PLTR",
+        "buy_price": 80.0,
+        "sell_price": 200.0,
+        "keywords": [
+            "palantir",
+            "pltr",
+            "alex karp",
+            "karp",
+            "foundry",
+            "gotham",
+        ],
+    },
+    {
+        "ticker": "MU",
+        "buy_price": 650.0,
+        "sell_price": 1050.0,
+        "keywords": [
+            "micron",
+            "mu",
+            "sanjay mehrotra",
+            "mehrotra",
+            "dram",
+            "hbm",
+        ],
+    },
 ]
+
 
 # ──────────────────────────────────────────────
 # 2. Telegram Bot API 설정

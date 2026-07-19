@@ -33,6 +33,40 @@ class StockAgent:
         self.chat_id: str = config.TELEGRAM_CHAT_ID
         self.gemini_key: str = config.GEMINI_API_KEY
         self.alpha_vantage_key: str = getattr(config, "ALPHA_VANTAGE_API_KEY", "")
+        # 중복 필터링 캐시 파일 및 메모리 리스트 초기화
+        self.cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sent_news_cache.json")
+        self.sent_cache: List[str] = self._load_sent_cache()
+
+    def _load_sent_cache(self) -> List[str]:
+        """최근에 전송/수집된 뉴스 URL 목록을 캐시 파일에서 불러옵니다."""
+        if not os.path.exists(self.cache_file):
+            return []
+        try:
+            with open(self.cache_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"뉴스 캐시 파일 로드 실패: {e}")
+            return []
+
+    def _save_sent_cache(self) -> None:
+        """최근에 전송/수집된 뉴스 URL 캐시를 파일에 영속화합니다."""
+        try:
+            with open(self.cache_file, "w", encoding="utf-8") as f:
+                json.dump(self.sent_cache, f, ensure_ascii=False, indent=2)
+            print(f"뉴스 캐시 저장 완료 (총 {len(self.sent_cache)}개)")
+        except Exception as e:
+            print(f"뉴스 캐시 파일 저장 실패: {e}")
+
+    def _is_already_sent(self, link: str) -> bool:
+        """해당 기사가 이미 전송/수집되었는지 확인합니다."""
+        return link in self.sent_cache
+
+    def _add_to_sent_cache(self, link: str) -> None:
+        """해당 기사를 캐시 리스트에 추가하고 오래된 캐시는 버립니다 (최대 100개 유지)."""
+        if link not in self.sent_cache:
+            self.sent_cache.append(link)
+            if len(self.sent_cache) > 100:
+                self.sent_cache = self.sent_cache[-100:]
 
     def normalize_text(self, text: str) -> str:
         """
@@ -239,11 +273,13 @@ class StockAgent:
             f"주식 티커: {ticker}\n"
             f"뉴스 제목: {title}\n"
             f"뉴스 원문 요약: {summary_source}\n\n"
-            "위의 영문 뉴스가 해당 주가에 미칠 단기적 영향을 분석하고 반드시 한국어로만 대답해주세요.\n"
+            f"위의 영문 뉴스가 해당 주식({ticker})의 주가나 기업 실적, 비즈니스 활동에 직접적인 관련이 있는지 판단하여 한국어로만 대답해주세요.\n"
+            "만약 기사가 지정된 주식과 직접적인 연관이 없고, 전체 시장 매크로나 무관한 타 산업 또는 일반 투자 팁 등의 뉴스라면 relevance를 false로 판단하십시오.\n"
             "JSON 형식:\n"
             "{\n"
-            '  "sentiment": "긍정적/부정적/중립 중 하나",\n'
-            '  "impact_score": 0~100 사이 정수,\n'
+            '  "relevance": true 또는 false,\n'
+            '  "sentiment": "긍정적/부정적/중립/무관 중 하나",\n'
+            '  "impact_score": 0~100 사이 정수 (relevance가 false이면 0),\n'
             '  "summary": "한국어로 번역 요약한 내용 (3문장 이내)"\n'
             "}"
         )
@@ -305,6 +341,7 @@ class StockAgent:
             )
 
         return {
+            "relevance": True,
             "sentiment": self.normalize_text(sentiment),
             "impact_score": score,
             "summary": self.normalize_text(summary),
@@ -454,6 +491,7 @@ class StockAgent:
             ticker: str = stock_cfg["ticker"]
             buy_price: float = stock_cfg.get("buy_price", 0.0)
             sell_price: float = stock_cfg.get("sell_price", 0.0)
+            keywords: List[str] = stock_cfg.get("keywords", [])
 
             price_info = []
             if buy_price > 0:
@@ -471,9 +509,37 @@ class StockAgent:
             ticker_analyses: List[Dict[str, Any]] = []
 
             for news in news_items:
-                analysis = self.analyze_news_with_gemini(ticker, news["title"], news.get("summary_source", ""))
-                analysis["link"] = news["link"]
-                analysis["title"] = self.normalize_text(news["title"])
+                link = news["link"]
+                title = news["title"]
+                summary_src = news.get("summary_source", "")
+
+                # A. 중복 뉴스 필터링
+                if self._is_already_sent(link):
+                    print(f"[{ticker}] 중복 기사 스킵: {title[:40]}...")
+                    continue
+
+                # B. 1차 키워드 필터링
+                if keywords:
+                    combined_text = (title + " " + summary_src).lower()
+                    if not any(kw.lower() in combined_text for kw in keywords):
+                        print(f"[{ticker}] 1차 키워드 미매칭으로 스킵: {title[:40]}...")
+                        # 키워드 필터로 제외된 기사는 다음번에 중복 분석을 막기 위해 캐시에 기록
+                        self._add_to_sent_cache(link)
+                        continue
+
+                # C. LLM 분석 진행 (2차 연관성 판별 포함)
+                analysis = self.analyze_news_with_gemini(ticker, title, summary_src)
+                analysis["link"] = link
+                analysis["title"] = self.normalize_text(title)
+
+                # D. 2차 LLM 연관성 필터링 (relevance가 False이면 제외)
+                if not analysis.get("relevance", True):
+                    print(f"[{ticker}] 2차 LLM 연관성 없음 판정으로 스킵: {title[:40]}...")
+                    self._add_to_sent_cache(link)
+                    continue
+
+                # 분석 및 연관성 검증을 통과한 뉴스는 캐시에 추가하고 분석 목록에 적재
+                self._add_to_sent_cache(link)
                 ticker_analyses.append(analysis)
                 time.sleep(1)
 
@@ -511,6 +577,9 @@ class StockAgent:
 
         report = self.build_report_message(all_analyses)
         self.send_telegram_message(report)
+
+        # 캐싱된 뉴스 영속 파일에 최종 기록
+        self._save_sent_cache()
         print("\n💡 [StockAgent] 워크플로우 완료.")
 
 
