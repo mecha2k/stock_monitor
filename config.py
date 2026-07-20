@@ -156,9 +156,7 @@ ALPHA_VANTAGE_API_KEY: str = os.getenv(
 # 4.5. Finnhub API 설정
 #      실시간 주식 뉴스 수집용 API 키 (무료: 분당 60회)
 # ──────────────────────────────────────────────
-FINNHUB_API_KEY: str = os.getenv(
-    "FINNHUB_API_KEY", "YOUR_FINNHUB_API_KEY_HERE"
-)
+FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "YOUR_FINNHUB_API_KEY_HERE")
 
 # ──────────────────────────────────────────────
 # 5. 알림 발송 시각 (KST 기준, 24시간 형식)

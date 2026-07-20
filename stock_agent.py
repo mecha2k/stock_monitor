@@ -32,10 +32,14 @@ class StockAgent:
         self.bot_token: str = config.TELEGRAM_BOT_TOKEN
         self.chat_id: str = config.TELEGRAM_CHAT_ID
         self.gemini_key: str = config.GEMINI_API_KEY
-        self.alpha_vantage_key: str = getattr(config, "ALPHA_VANTAGE_API_KEY", "")
+        self.alpha_vantage_key: str = getattr(
+            config, "ALPHA_VANTAGE_API_KEY", ""
+        )
         self.finnhub_key: str = getattr(config, "FINNHUB_API_KEY", "")
         # 중복 필터링 캐시 파일 및 메모리 리스트 초기화
-        self.cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sent_news_cache.json")
+        self.cache_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "sent_news_cache.json"
+        )
         self.sent_cache: List[str] = self._load_sent_cache()
 
     def _load_sent_cache(self) -> List[str]:
@@ -128,17 +132,28 @@ class StockAgent:
         Returns:
             List[Dict[str, Any]]: 수집된 최신 뉴스 목록 (최대 3개)
         """
-        if not self.alpha_vantage_key or "YOUR_ALPHAVANTAGE_API_KEY_HERE" in self.alpha_vantage_key:
-            print(f"[{ticker}] Alpha Vantage API 키가 없어 뉴스 수집을 건너뜁니다.")
+        if (
+            not self.alpha_vantage_key
+            or "YOUR_ALPHAVANTAGE_API_KEY_HERE" in self.alpha_vantage_key
+        ):
+            print(
+                f"[{ticker}] Alpha Vantage API 키가 없어 뉴스 수집을 건너뜁니다."
+            )
             return []
 
         # limit=3 파라미터로 최신 3개만 요청
-        url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={ticker}&limit=3&apikey={self.alpha_vantage_key}"
+        url = (
+            "https://www.alphavantage.co/query?"
+            "function=NEWS_SENTIMENT&"
+            f"tickers={ticker}&limit=3&apikey={self.alpha_vantage_key}"
+        )
         print(f"[{ticker}] Alpha Vantage 뉴스 수집 중...")
 
         try:
             # 403 Forbidden 등 방화벽 차단을 우회하기 위해 User-Agent 명시
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0"}
+            )
             with urllib.request.urlopen(req, timeout=10) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
 
@@ -155,13 +170,19 @@ class StockAgent:
                     {
                         "title": entry.get("title", "제목 없음"),
                         "link": entry.get("url", "#"),
-                        "published": entry.get("time_published", "시간 정보 없음"),
+                        "published": entry.get(
+                            "time_published", "시간 정보 없음"
+                        ),
                         "summary_source": entry.get("summary", ""),
                     }
                 )
             return news_list
         except urllib.error.HTTPError as e:
-            print(f"[{ticker}] Alpha Vantage API 호출 실패 (HTTP {e.code}): {e.read().decode('utf-8', errors='replace')}")
+            err_msg = e.read().decode("utf-8", errors="replace")
+            print(
+                f"[{ticker}] Alpha Vantage API 호출 실패 "
+                f"(HTTP {e.code}): {err_msg}"
+            )
             return []
         except Exception as e:
             print(f"[{ticker}] Alpha Vantage 뉴스 수집 실패: {e}")
@@ -177,7 +198,10 @@ class StockAgent:
         Returns:
             List[Dict[str, Any]]: 수집된 최신 뉴스 목록 (최대 3개)
         """
-        if not self.finnhub_key or "YOUR_FINNHUB_API_KEY_HERE" in self.finnhub_key:
+        if (
+            not self.finnhub_key
+            or "YOUR_FINNHUB_API_KEY_HERE" in self.finnhub_key
+        ):
             print(f"[{ticker}] Finnhub API 키가 없어 뉴스 수집을 건너뜁니다.")
             return []
 
@@ -186,11 +210,17 @@ class StockAgent:
         from_date = (today - timedelta(days=2)).strftime("%Y-%m-%d")
         to_date = today.strftime("%Y-%m-%d")
 
-        url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from={from_date}&to={to_date}&token={self.finnhub_key}"
+        url = (
+            f"https://finnhub.io/api/v1/company-news?"
+            f"symbol={ticker}&from={from_date}&to={to_date}&"
+            f"token={self.finnhub_key}"
+        )
         print(f"[{ticker}] Finnhub 뉴스 수집 중...")
 
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0"}
+            )
             with urllib.request.urlopen(req, timeout=10) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
 
@@ -229,7 +259,10 @@ class StockAgent:
         Returns:
             Optional[Dict[str, Any]]: 성공 시 분석 결과 딕셔너리, 실패 시 None
         """
-        url = f"{self.GEMINI_BASE_URL}/{model}:generateContent?key={self.gemini_key}"
+        url = (
+            f"{self.GEMINI_BASE_URL}/{model}:generateContent?"
+            f"key={self.gemini_key}"
+        )
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -281,16 +314,17 @@ class StockAgent:
                             f"[{ticker}] [{model}] 429 Rate Limit — "
                             f"최대 재시도({max_retries}회) 소진. 다음 모델로 전환합니다."
                         )
-                    else:
                         print(
                             f"[{ticker}] [{model}] 429 Rate Limit "
-                            f"(시도 {attempt}/{max_retries}). {wait_sec}초 대기 후 재시도합니다."
+                            f"(시도 {attempt}/{max_retries}). "
+                            f"{wait_sec}초 대기 후 재시도합니다."
                         )
                         time.sleep(wait_sec)
                 else:
                     # 401, 400 등 재시도해도 해결되지 않는 오류는 즉시 중단
                     print(
-                        f"[{ticker}] [{model}] HTTP {e.code} 오류 (재시도 불필요): {err_msg}"
+                        f"[{ticker}] [{model}] HTTP {e.code} 오류 "
+                        f"(재시도 불필요): {err_msg}"
                     )
                     return None
 
@@ -300,7 +334,9 @@ class StockAgent:
 
         return None
 
-    def analyze_news_with_gemini(self, ticker: str, title: str, summary_source: str = "") -> Dict[str, Any]:
+    def analyze_news_with_gemini(
+        self, ticker: str, title: str, summary_source: str = ""
+    ) -> Dict[str, Any]:
         """
         Gemini LLM API를 호출하여 뉴스의 주가 영향도 감성 분석 및 핵심 요약을 생성합니다.
         1차 모델(gemini-2.5-flash) 실패 시 2차 모델(gemini-2.0-flash-lite)로 자동 폴백합니다.
@@ -325,8 +361,12 @@ class StockAgent:
             f"주식 티커: {ticker}\n"
             f"뉴스 제목: {title}\n"
             f"뉴스 원문 요약: {summary_source}\n\n"
-            f"위의 영문 뉴스가 해당 주식({ticker})의 주가나 기업 실적, 비즈니스 활동에 직접적인 관련이 있는지 판단하여 한국어로만 대답해주세요.\n"
-            "만약 기사가 지정된 주식과 직접적인 연관이 없고, 전체 시장 매크로나 무관한 타 산업 또는 일반 투자 팁 등의 뉴스라면 relevance를 false로 판단하십시오.\n"
+            f"위의 영문 뉴스가 해당 주식({ticker})의 주가나 기업 실적, "
+            "비즈니스 활동에 직접적인 관련이 있는지 판단하여 "
+            "한국어로만 대답해주세요.\n"
+            "만약 기사가 지정된 주식과 직접적인 연관이 없고, 전체 시장 매크로나 "
+            "무관한 타 산업 또는 일반 투자 팁 등의 뉴스라면 "
+            "relevance를 false로 판단하십시오.\n"
             "JSON 형식:\n"
             "{\n"
             '  "relevance": true 또는 false,\n'
@@ -338,18 +378,24 @@ class StockAgent:
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
         # ── 1차 시도: PRIMARY_MODEL (gemini-2.5-flash) ──────────────────────
-        result = self._call_gemini_with_retry(ticker, self.PRIMARY_MODEL, payload)
+        result = self._call_gemini_with_retry(
+            ticker, self.PRIMARY_MODEL, payload
+        )
         if result is not None:
             return result
 
         # ── 2차 시도: FALLBACK_MODEL (gemini-2.0-flash-lite) ────────────────
         print(f"[{ticker}] {self.FALLBACK_MODEL} 폴백 모델로 재시도합니다.")
-        result = self._call_gemini_with_retry(ticker, self.FALLBACK_MODEL, payload)
+        result = self._call_gemini_with_retry(
+            ticker, self.FALLBACK_MODEL, payload
+        )
         if result is not None:
             return result
 
         # ── 3차 최종 폴백: 로컬 Mock 분석 엔진 ─────────────────────────────
-        print(f"[{ticker}] 모든 Gemini 모델 호출 실패 — 로컬 Mock 분석으로 대체합니다.")
+        print(
+            f"[{ticker}] 모든 Gemini 모델 호출 실패 — 로컬 Mock 분석으로 대체합니다."
+        )
         return self._mock_analysis(ticker, title)
 
     def _mock_analysis(self, ticker: str, title: str) -> Dict[str, Any]:
@@ -441,7 +487,9 @@ class StockAgent:
             print(f"텔레그램 전송 실패: {e}")
             return False
 
-    def build_report_message(self, all_analyses: Dict[str, Dict[str, Any]]) -> str:
+    def build_report_message(
+        self, all_analyses: Dict[str, Dict[str, Any]]
+    ) -> str:
         """
         티커별 최고 점수 뉴스 1개씩 선별된 분석 결과와
         종가 / 매수·매도 희망가 비교 정보를 텔레그램 친화적인 HTML 형식으로 구성합니다.
@@ -474,10 +522,18 @@ class StockAgent:
                 # 희망가 정보 한 줄 출력
                 target_parts = []
                 if buy_price > 0:
-                    buy_str = f"{buy_price:,.0f}" if buy_price.is_integer() else f"{buy_price:,.2f}"
+                    buy_str = (
+                        f"{buy_price:,.0f}"
+                        if buy_price.is_integer()
+                        else f"{buy_price:,.2f}"
+                    )
                     target_parts.append(f"🛒 매수 (${buy_str})")
                 if sell_price > 0:
-                    sell_str = f"{sell_price:,.0f}" if sell_price.is_integer() else f"{sell_price:,.2f}"
+                    sell_str = (
+                        f"{sell_price:,.0f}"
+                        if sell_price.is_integer()
+                        else f"{sell_price:,.2f}"
+                    )
                     target_parts.append(f"📈 매도 (${sell_str})")
                 if target_parts:
                     msg_lines.append(f"희망가 : {', '.join(target_parts)}")
@@ -498,10 +554,18 @@ class StockAgent:
                 msg_lines.append("💰 종가: <i>수집 실패</i>")
                 target_parts = []
                 if buy_price > 0:
-                    buy_str = f"{buy_price:,.0f}" if buy_price.is_integer() else f"{buy_price:,.2f}"
+                    buy_str = (
+                        f"{buy_price:,.0f}"
+                        if buy_price.is_integer()
+                        else f"{buy_price:,.2f}"
+                    )
                     target_parts.append(f"🛒 매수 (${buy_str})")
                 if sell_price > 0:
-                    sell_str = f"{sell_price:,.0f}" if sell_price.is_integer() else f"{sell_price:,.2f}"
+                    sell_str = (
+                        f"{sell_price:,.0f}"
+                        if sell_price.is_integer()
+                        else f"{sell_price:,.2f}"
+                    )
                     target_parts.append(f"📈 매도 (${sell_str})")
                 if target_parts:
                     msg_lines.append(f"희망가 : {', '.join(target_parts)}")
@@ -550,7 +614,9 @@ class StockAgent:
                 price_info.append(f"매수 ${buy_price:,.2f}")
             if sell_price > 0:
                 price_info.append(f"매도 ${sell_price:,.2f}")
-            price_desc = "  /  ".join(price_info) if price_info else "희망가 미설정"
+            price_desc = (
+                "  /  ".join(price_info) if price_info else "희망가 미설정"
+            )
             print(f"\n── [{ticker}] 처리 시작 ({price_desc}) ──")
 
             # 1) 종가 수집
@@ -560,10 +626,17 @@ class StockAgent:
             news_items = []
 
             # Alpha Vantage 뉴스 수집 (API 키가 설정되어 있을 때만 호출 및 속도 지연 수행)
-            has_av = self.alpha_vantage_key and "YOUR_ALPHAVANTAGE_API_KEY_HERE" not in self.alpha_vantage_key
+            has_av = (
+                self.alpha_vantage_key
+                and "YOUR_ALPHAVANTAGE_API_KEY_HERE"
+                not in self.alpha_vantage_key
+            )
             if has_av:
                 if stock_cfg != self.stock_configs[0]:
-                    print(f"[{ticker}] Alpha Vantage API 속도 제한 방지를 위해 12초간 대기합니다...")
+                    print(
+                        f"[{ticker}] Alpha Vantage API 속도 제한 방지를 위해 "
+                        "12초간 대기합니다..."
+                    )
                     time.sleep(12)
                 news_items.extend(self.fetch_alphavantage_news(ticker))
 
@@ -586,19 +659,25 @@ class StockAgent:
                 if keywords:
                     combined_text = (title + " " + summary_src).lower()
                     if not any(kw.lower() in combined_text for kw in keywords):
-                        print(f"[{ticker}] 1차 키워드 미매칭으로 스킵: {title[:40]}...")
+                        print(
+                            f"[{ticker}] 1차 키워드 미매칭으로 스킵: {title[:40]}..."
+                        )
                         # 키워드 필터로 제외된 기사는 다음번에 중복 분석을 막기 위해 캐시에 기록
                         self._add_to_sent_cache(link)
                         continue
 
                 # C. LLM 분석 진행 (2차 연관성 판별 포함)
-                analysis = self.analyze_news_with_gemini(ticker, title, summary_src)
+                analysis = self.analyze_news_with_gemini(
+                    ticker, title, summary_src
+                )
                 analysis["link"] = link
                 analysis["title"] = self.normalize_text(title)
 
                 # D. 2차 LLM 연관성 필터링 (relevance가 False이면 제외)
                 if not analysis.get("relevance", True):
-                    print(f"[{ticker}] 2차 LLM 연관성 없음 판정으로 스킵: {title[:40]}...")
+                    print(
+                        f"[{ticker}] 2차 LLM 연관성 없음 판정으로 스킵: {title[:40]}..."
+                    )
                     self._add_to_sent_cache(link)
                     continue
 
@@ -609,7 +688,9 @@ class StockAgent:
 
             # 3) impact_score 최고 뉴스 1개 선별
             if ticker_analyses:
-                top = max(ticker_analyses, key=lambda x: x.get("impact_score", 0))
+                top = max(
+                    ticker_analyses, key=lambda x: x.get("impact_score", 0)
+                )
                 print(
                     f"[{ticker}] 최고 점수 뉴스 선별: "
                     f"'{top['title'][:40]}...' "

@@ -3,7 +3,8 @@
 
 ## 1. Python 환경
 
-- **Python 환경**: 메모리/용량 절약을 위해 conda를 사용하지 않고 standard Python 가상환경(`.venv`)과 `uv` 패키지 매니저를 사용합니다.
+- **Python 환경**: 메모리/용량 절약을 위해 conda를 사용하지 않고
+  standard Python 가상환경(`.venv`)과 `uv` 패키지 매니저를 사용합니다.
   - Python 인터프리터 경로:
     - Linux/macOS: `./.venv/bin/python`
     - Windows: `.\.venv\Scripts\python.exe`
@@ -13,7 +14,7 @@
 ## 2. 코드 스타일
 
 - **포매터**: Black (`--line-length 80`)
-- **라인 최대 길이**: **80자** (PEP 8 표준)
+- **라인 최대 길이**: **80자** (모든 소스 및 문서 파일의 라인은 80자 이내로 제한)
 - **저장 시 자동 포매팅**: `.vscode/settings.json`의 `formatOnSave: true` 적용 중
 - **긴 문자열 처리**: 괄호 안 묵시적 문자열 연결(implicit string concatenation) 사용
   ```python
@@ -42,7 +43,7 @@ stock_monitor/
 ## 4. 외부 API 규칙
 
 ### Gemini API
-- **엔드포인트**: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`
+- **엔드포인트**: `{GEMINI_BASE_URL}/{model}:generateContent`
 - **현재 모델**: `gemini-2.5-flash` (최신 가용 모델)
 - **API 버전**: `v1beta` 사용
   - `v1`은 `responseMimeType` 필드 미지원 (400 오류 발생)
