@@ -87,7 +87,7 @@ TARGET_STOCKS: List[Dict[str, Any]] = [
         "keywords": ["amazon", "amzn", "aws", "bezos", "andy jassy"],
     },
     {
-        "ticker": "SPACEX",
+        "ticker": "SPCX",
         "buy_price": 100.0,
         "sell_price": 200.0,
         "keywords": [
@@ -150,6 +150,14 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
 # ──────────────────────────────────────────────
 ALPHA_VANTAGE_API_KEY: str = os.getenv(
     "ALPHA_VANTAGE_API_KEY", "YOUR_ALPHAVANTAGE_API_KEY_HERE"
+)
+
+# ──────────────────────────────────────────────
+# 4.5. Finnhub API 설정
+#      실시간 주식 뉴스 수집용 API 키 (무료: 분당 60회)
+# ──────────────────────────────────────────────
+FINNHUB_API_KEY: str = os.getenv(
+    "FINNHUB_API_KEY", "YOUR_FINNHUB_API_KEY_HERE"
 )
 
 # ──────────────────────────────────────────────

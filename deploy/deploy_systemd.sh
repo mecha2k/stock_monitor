@@ -14,7 +14,7 @@ set -euo pipefail
 # ✏️  실제 환경에 맞게 수정하세요
 # ──────────────────────────────────────────────────────────
 SERVICE_USER="ubuntu"
-PROJECT_DIR="/home/ubuntu/stock_monitor"
+PROJECT_DIR="/home/ubuntu/codes/antigravity/stock_monitor"
 VENV_PYTHON="${PROJECT_DIR}/.venv/bin/python"
 # ──────────────────────────────────────────────────────────
 

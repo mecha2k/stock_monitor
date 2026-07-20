@@ -33,6 +33,7 @@ class StockAgent:
         self.chat_id: str = config.TELEGRAM_CHAT_ID
         self.gemini_key: str = config.GEMINI_API_KEY
         self.alpha_vantage_key: str = getattr(config, "ALPHA_VANTAGE_API_KEY", "")
+        self.finnhub_key: str = getattr(config, "FINNHUB_API_KEY", "")
         # 중복 필터링 캐시 파일 및 메모리 리스트 초기화
         self.cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sent_news_cache.json")
         self.sent_cache: List[str] = self._load_sent_cache()
@@ -141,6 +142,11 @@ class StockAgent:
             with urllib.request.urlopen(req, timeout=10) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
 
+            if "Note" in res_data or "Information" in res_data:
+                msg = res_data.get("Note") or res_data.get("Information")
+                print(f"[{ticker}] Alpha Vantage API 제한 알림: {msg}")
+                return []
+
             news_list: List[Dict[str, Any]] = []
             feed = res_data.get("feed", [])
 
@@ -159,6 +165,52 @@ class StockAgent:
             return []
         except Exception as e:
             print(f"[{ticker}] Alpha Vantage 뉴스 수집 실패: {e}")
+            return []
+
+    def fetch_finnhub_news(self, ticker: str) -> List[Dict[str, Any]]:
+        """
+        Finnhub API를 통해 특정 주식 티커의 최신 뉴스를 수집합니다.
+
+        Args:
+            ticker (str): 주식 티커 (예: "AAPL")
+
+        Returns:
+            List[Dict[str, Any]]: 수집된 최신 뉴스 목록 (최대 3개)
+        """
+        if not self.finnhub_key or "YOUR_FINNHUB_API_KEY_HERE" in self.finnhub_key:
+            print(f"[{ticker}] Finnhub API 키가 없어 뉴스 수집을 건너뜁니다.")
+            return []
+
+        # 최근 2일 이내의 뉴스 조회
+        today = datetime.now(KST)
+        from_date = (today - timedelta(days=2)).strftime("%Y-%m-%d")
+        to_date = today.strftime("%Y-%m-%d")
+
+        url = f"https://finnhub.io/api/v1/company-news?symbol={ticker}&from={from_date}&to={to_date}&token={self.finnhub_key}"
+        print(f"[{ticker}] Finnhub 뉴스 수집 중...")
+
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+
+            if not isinstance(res_data, list):
+                print(f"[{ticker}] Finnhub API 오류 응답: {res_data}")
+                return []
+
+            news_list: List[Dict[str, Any]] = []
+            for entry in res_data[:3]:
+                news_list.append(
+                    {
+                        "title": entry.get("headline", "제목 없음"),
+                        "link": entry.get("url", "#"),
+                        "published": str(entry.get("datetime", "")),
+                        "summary_source": entry.get("summary", ""),
+                    }
+                )
+            return news_list
+        except Exception as e:
+            print(f"[{ticker}] Finnhub 뉴스 수집 실패: {e}")
             return []
 
     def _call_gemini_with_retry(
@@ -505,7 +557,19 @@ class StockAgent:
             close_price = self.fetch_stock_price(ticker)
 
             # 2) 뉴스 수집 및 분석
-            news_items = self.fetch_alphavantage_news(ticker)
+            news_items = []
+
+            # Alpha Vantage 뉴스 수집 (API 키가 설정되어 있을 때만 호출 및 속도 지연 수행)
+            has_av = self.alpha_vantage_key and "YOUR_ALPHAVANTAGE_API_KEY_HERE" not in self.alpha_vantage_key
+            if has_av:
+                if stock_cfg != self.stock_configs[0]:
+                    print(f"[{ticker}] Alpha Vantage API 속도 제한 방지를 위해 12초간 대기합니다...")
+                    time.sleep(12)
+                news_items.extend(self.fetch_alphavantage_news(ticker))
+
+            # Finnhub 뉴스 수집
+            news_items.extend(self.fetch_finnhub_news(ticker))
+
             ticker_analyses: List[Dict[str, Any]] = []
 
             for news in news_items:
