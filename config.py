@@ -124,6 +124,30 @@ TARGET_STOCKS: List[Dict[str, Any]] = [
             "hbm",
         ],
     },
+    {
+        "ticker": "REMX",
+        "buy_price": 40.0,
+        "sell_price": 100.0,
+        "keywords": [
+            "remx",
+            "vaneck",
+            "rare earth",
+            "strategic metals",
+            "rare earths",
+        ],
+    },
+    {
+        "ticker": "COPX",
+        "buy_price": 50.0,
+        "sell_price": 100.0,
+        "keywords": [
+            "copx",
+            "global x",
+            "copper",
+            "copper miners",
+            "copper mining",
+        ],
+    },
 ]
 
 
