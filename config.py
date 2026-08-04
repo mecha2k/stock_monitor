@@ -88,7 +88,7 @@ TARGET_STOCKS: List[Dict[str, Any]] = [
     },
     {
         "ticker": "SPCX",
-        "buy_price": 100.0,
+        "buy_price": 80.0,
         "sell_price": 200.0,
         "keywords": [
             "spacex",

@@ -11,6 +11,7 @@
 
 # --- 일회성 유틸리티 스크립트 ---
 get_chat_id.py
+sent_news_cache.json
 
 # --- Python 캐시 및 컴파일 파일 ---
 __pycache__/
