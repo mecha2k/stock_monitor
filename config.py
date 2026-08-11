@@ -185,4 +185,5 @@ FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "YOUR_FINNHUB_API_KEY_HERE")
 # ──────────────────────────────────────────────
 # 5. 알림 발송 시각 (KST 기준, 24시간 형식)
 # ──────────────────────────────────────────────
-NOTIFICATION_TIME: str = "08:00"
+NOTIFICATION_TIME: str = os.getenv("NOTIFICATION_TIME", "05:00")
+
