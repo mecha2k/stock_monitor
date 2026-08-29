@@ -15,7 +15,7 @@ def run_scheduler() -> None:
     """
     print("⏰ [Scheduler] 주식 모니터링 스케줄러를 구동합니다.")
     print(
-        f"⏰ [Scheduler] 매일 오전 {config.NOTIFICATION_TIME} (KST) 에 알림이 발송됩니다."
+        f"⏰ [Scheduler] 화~토요일 오전 {config.NOTIFICATION_TIME} (KST) 에 알림이 발송됩니다. (일, 월요일 제외)"
     )
 
     agent = StockAgent()
@@ -28,10 +28,14 @@ def run_scheduler() -> None:
             current_time_str = now_kst.strftime("%H:%M")
             current_date = now_kst.date()
 
-            # 지정된 시간대에 돌입하고, 오늘 하루 동안 실행되지 않았을 경우 작동
+            # 일요일(6)과 월요일(0)은 실행에서 제외
+            is_skipped_day = now_kst.weekday() in (0, 6)
+
+            # 지정된 시간대에 돌입하고, 오늘 하루 동안 실행되지 않았으며, 일요일/월요일이 아닐 경우 작동
             if (
                 current_time_str == config.NOTIFICATION_TIME
                 and last_run_date != current_date
+                and not is_skipped_day
             ):
                 print(
                     f"⏰ [Scheduler] 예약된 시간({config.NOTIFICATION_TIME})에 도달했습니다. 분석을 시작합니다."
@@ -41,6 +45,7 @@ def run_scheduler() -> None:
                 print(
                     f"⏰ [Scheduler] 일일 분석이 정상적으로 마무리되었습니다. 다음 트리거를 대기합니다."
                 )
+
 
             # 과도한 CPU 사용량 방지를 위해 30초 대기
             time.sleep(30)
